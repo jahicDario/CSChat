@@ -1,26 +1,25 @@
 import java.io.BufferedReader;
+
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.Socket;
-import java.util.ArrayList;
+import java.util.LinkedList;
 
-import klijent.Klijent;
 
 public class ServerNit extends Thread{
 
 	BufferedReader ulazniTokOdKlijenta = null;
 	PrintStream izlazniTokKaKlijetnu = null;
 	Socket soketZaKom = null;
-	Klijent klijent = null;
-	ArrayList<ServerNit> nitiZaKlijente;
+	LinkedList<ServerNit> nitiZaKlijente;
 	//static ArrayList<Klijent> klijenti = new ArrayList<>();
 	String ime;
 	String pol;
 	
-	public ServerNit(Socket soket, ArrayList<ServerNit> klijent) {
+	public ServerNit(Socket soket, LinkedList<ServerNit> nitiZaKlijente2) {
 		this.soketZaKom = soket; 
-		this.nitiZaKlijente = klijent;
+		this.nitiZaKlijente = nitiZaKlijente2;
 	}
 	
 	public Socket getSoketZaKom() {
@@ -60,10 +59,10 @@ public class ServerNit extends Thread{
 			izlazniTokKaKlijetnu = new PrintStream(soketZaKom.getOutputStream());
 			
 			izlazniTokKaKlijetnu.println("Unesite ime: ");
-			this.ime = ulazniTokOdKlijenta.readLine();
+			ime = ulazniTokOdKlijenta.readLine();
 			while(provera != true){
-				izlazniTokKaKlijetnu.println("Unesite pol (M ili Z): ");
-				this.pol = ulazniTokOdKlijenta.readLine();
+				izlazniTokKaKlijetnu.println("Unesite pol (M ili Z): /n");
+				pol = ulazniTokOdKlijenta.readLine();
 				
 				if(pol.equals("M")){
 					izlazniTokKaKlijetnu.println("Dobrosao " + ime + "./nZa izlaz /quit");
@@ -77,6 +76,8 @@ public class ServerNit extends Thread{
 			}
 //			Klijent klijent = new Klijent(ime, pol, soketZaKom);
 //			klijenti.add(klijent);
+			this.ime = ime;
+			this.pol = pol;
 			while(true){
 				linija = ulazniTokOdKlijenta.readLine();
 				if(linija.startsWith("/quit")){
@@ -86,7 +87,7 @@ public class ServerNit extends Thread{
 				izlazniTokKaKlijetnu.println("Izaberite osobu kome zelite da posaljete poruku(npr. pera mika zika):");
 				int i = 1;
 				for (ServerNit sn : nitiZaKlijente) {
-					if(sn.getPol().equals(this.getPol())){
+					if(sn.getPol().equals(pol)){
 						continue;
 					}else{
 						izlazniTokKaKlijetnu.println(i + ". " + sn.getIme());
@@ -99,7 +100,7 @@ public class ServerNit extends Thread{
 				for (int j = 0; j < nizKlijentaKomeTrebaPoslatiPoruku.length; j++) {
 					for (ServerNit sn : nitiZaKlijente) {
 						if(sn.getIme().equals(nizKlijentaKomeTrebaPoslatiPoruku[j])){
-							sn.izlazniTokKaKlijentu("<" + ime + ">" + linija); /////????
+							sn.izlazniTokKaKlijetnu.println("<" + ime + ">" + linija); /////????
 						}
 					}
 				}
