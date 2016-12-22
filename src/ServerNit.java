@@ -6,7 +6,11 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.io.PrintWriter;
+import java.net.DatagramPacket;
+import java.net.DatagramSocket;
+import java.net.InetAddress;
 import java.net.Socket;
+import java.net.SocketException;
 import java.text.DateFormat;
 import java.text.SimpleDateFormat;
 import java.util.Date;
@@ -21,6 +25,15 @@ public class ServerNit extends Thread {
 	// static ArrayList<Klijent> klijenti = new ArrayList<>();
 	String ime;
 	String pol;
+	int portZaUdp;
+
+	public int getPortZaUdp() {
+		return portZaUdp;
+	}
+
+	public void setPortZaUdp(int portZaUdp) {
+		this.portZaUdp = portZaUdp;
+	}
 
 	public ServerNit(Socket soket, LinkedList<ServerNit> nitiZaKlijente2) {
 		this.soketZaKom = soket;
@@ -61,10 +74,15 @@ public class ServerNit extends Thread {
 		String[] nizKlijentaKomeTrebaPoslatiPoruku;
 		String zvezda = "";
 		String proveriPol = "";
+		String klijentPortZaUdp = "";
+		
 		try {
 			ulazniTokOdKlijenta = new BufferedReader(new InputStreamReader(soketZaKom.getInputStream()));
 			izlazniTokKaKlijetnu = new PrintStream(soketZaKom.getOutputStream());
-
+			//prvo procitaj port klijenta za udp
+			klijentPortZaUdp = ulazniTokOdKlijenta.readLine();
+			this.portZaUdp = Integer.parseInt(klijentPortZaUdp);
+			
 			izlazniTokKaKlijetnu.println("Unesite ime: ");
 			ime = ulazniTokOdKlijenta.readLine();
 			// Unosenje pola dok se ne unese u pravom formatu
@@ -72,10 +90,10 @@ public class ServerNit extends Thread {
 				izlazniTokKaKlijetnu.println("Unesite pol (M ili Z): \n");
 				pol = ulazniTokOdKlijenta.readLine();
 
-				if (pol.equals("M")) {
+				if (pol.equals("M") || pol.equals("m")) {
 					izlazniTokKaKlijetnu.println("Dobrosao " + ime + ".\nZa izlaz unesite quit");
 					provera = true;
-				} else if (pol.equals("Z")) {
+				} else if (pol.equals("Z") || pol.equals("z")) {
 					izlazniTokKaKlijetnu.println("Dobrosla " + ime + ".\nZa izlaz unesite quit");
 					provera = true;
 				} else {
@@ -85,6 +103,18 @@ public class ServerNit extends Thread {
 			// Unesi u listu korisnika.
 			this.ime = ime;
 			this.pol = pol;
+			//Upisi u fajl da je osoba sa this.ime i this.pol usao u cet
+			try {
+				PrintWriter out = new PrintWriter(
+						new BufferedWriter(new FileWriter("poruke.txt", true)));
+				DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
+				Date dateobj = new Date();
+				out.println("Korisnik sa imenom: " + ime + " se pricljucio cetu u " + df.format(dateobj));
+				out.close();
+			} catch (FileNotFoundException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 			while (true) {
 				// proveri da li ima nekog kome moze da se posalje poruka.
 				if (nitiZaKlijente.size() <= 1) {
@@ -103,6 +133,7 @@ public class ServerNit extends Thread {
 				}
 
 				int i = 1;
+				String lista = "";
 				while (true) {
 					// proverava koji su trenutno povezani a suprotnog su pola
 					// izlistaj listu korisnika suprotnog pola
@@ -110,13 +141,15 @@ public class ServerNit extends Thread {
 						if (sn.getPol().equals(pol)) {
 							continue;
 						} else {
-							izlazniTokKaKlijetnu.println(i + ". " + sn.getIme());
+							//ubaci u listu koja ce se posle poslati preko udp
+							lista += i +") " + sn.getIme() + "\n";
+//							izlazniTokKaKlijetnu.println(i + ". " + sn.getIme());
 							i++;
 						}
 					}
 					// ako je i jedan, nema nijednog klijenta suprotnog pola
 					if (i == 1) {
-						izlazniTokKaKlijetnu.println("Nema korisnika suprotnog pola.");
+						izlazniTokKaKlijetnu.println("\nNema korisnika suprotnog pola.");
 						izlazniTokKaKlijetnu.println("Unesite * da proverite da li se neko suprotnog pola konektovao.");
 						proveriPol = "";
 						while (!proveriPol.startsWith("*")) {
@@ -127,6 +160,15 @@ public class ServerNit extends Thread {
 					} else {
 						izlazniTokKaKlijetnu
 								.println("Izaberite osobe kojima zelite da posaljete poruku(npr. pera mika zika):");
+						//UDP
+						DatagramSocket datagramSoket = new DatagramSocket();
+						InetAddress IPAdresa = InetAddress.getByName("localhost");
+						byte[] podaciZaKlijenta = new byte[1024];
+						podaciZaKlijenta = lista.getBytes();
+						DatagramPacket paketZaKlijenta = new DatagramPacket(podaciZaKlijenta, podaciZaKlijenta.length, IPAdresa, this.portZaUdp);
+						datagramSoket.send(paketZaKlijenta);
+						datagramSoket.close();
+						
 						zaKogaJePoruka = ulazniTokOdKlijenta.readLine();
 						nizKlijentaKomeTrebaPoslatiPoruku = zaKogaJePoruka.split(" ");
 						int neposlatePoruke = 0;
@@ -142,8 +184,8 @@ public class ServerNit extends Thread {
 												new BufferedWriter(new FileWriter("poruke.txt", true)));
 										DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
 										Date dateobj = new Date();
-										out.println("<" + ime + "> " + linija + "\t | Vreme slanja: " + df.format(dateobj)
-												+ "\t | Za: " + sn.getIme());
+										out.println("<" + ime + "> " + linija + "\t | Vreme slanja: "
+												+ df.format(dateobj) + "\t | Za: " + sn.getIme());
 										out.close();
 									} catch (FileNotFoundException e1) {
 										// TODO Auto-generated catch block
@@ -157,17 +199,18 @@ public class ServerNit extends Thread {
 							// izasao je umedjuuvremenu
 							if (brojac == nitiZaKlijente.size()) {
 								izlazniTokKaKlijetnu
-										.println("Poruka nije poslata: " + nizKlijentaKomeTrebaPoslatiPoruku[j] 
-												 + ", trazeni klijent se ne nalazi na cetu.");
+										.println("Poruka nije poslata: " + nizKlijentaKomeTrebaPoslatiPoruku[j]
+												+ ", trazeni klijent se ne nalazi na cetu.");
 								neposlatePoruke++;
-								//upisi u fajl da poruka nije uspesno poslata
+								// upisi u fajl da poruka nije uspesno poslata
 								try {
 									PrintWriter out = new PrintWriter(
 											new BufferedWriter(new FileWriter("poruke.txt", true)));
 									DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
 									Date dateobj = new Date();
 									out.println("<" + ime + "> " + linija + "\t | Vreme slanja: " + df.format(dateobj)
-											+ "\t | Za: " + nizKlijentaKomeTrebaPoslatiPoruku[j] + "\t | NIJE USPESNO POSLATA");
+											+ "\t | Za: " + nizKlijentaKomeTrebaPoslatiPoruku[j]
+											+ "\t | NIJE USPESNO POSLATA");
 									out.close();
 								} catch (FileNotFoundException e1) {
 									// TODO Auto-generated catch block
@@ -190,6 +233,18 @@ public class ServerNit extends Thread {
 			}
 			izlazniTokKaKlijetnu.println("Dovidjenja " + ime);
 			nitiZaKlijente.remove(this);
+			//upisi u fajl da se korisnik izlogovao
+			try {
+				PrintWriter out = new PrintWriter(
+						new BufferedWriter(new FileWriter("poruke.txt", true)));
+				DateFormat df = new SimpleDateFormat("dd/MM/yy HH:mm:ss");
+				Date dateobj = new Date();
+				out.println("Korisnik sa imenom: " + ime + " je napustio cet u " + df.format(dateobj));
+				out.close();
+			} catch (FileNotFoundException e1) {
+				// TODO Auto-generated catch block
+				e1.printStackTrace();
+			}
 
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
